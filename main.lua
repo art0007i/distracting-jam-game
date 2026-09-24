@@ -199,37 +199,28 @@ function love.update(dt)
     camy = py
 end
 
-function t(x, y)
-    local w, h = love.graphics.getDimensions()
-    return x - camx + w / 2, y - camy + h / 2
-end
-
-function rect_cam(type, x, y, cx, cy)
-    local x, y = t(x, y)
-    love.graphics.rectangle(type, x, y, cx, cy)
-end
-
-function print_cam(text, x, y)
-    local x, y = t(x, y)
-    love.graphics.print(text, x, y)
-end
-
 function love.draw()
+    local w, h = love.graphics.getDimensions()
+    love.graphics.push()
+    love.graphics.translate(-camx + w / 2, -camy + h / 2)
+
     for x, cells in ipairs(maze) do
         for y, cell in ipairs(cells) do
             love.graphics.setColor(1, 1, 1)
             local thickness = cell_size - wall_size
-            rect_cam("fill", cell_size * x, cell_size * y, thickness, thickness)
+            love.graphics.rectangle("fill", cell_size * x, cell_size * y, thickness, thickness)
             if (cell.right) then
-                rect_cam("fill", cell_size * (x + 0.5), cell_size * y, cell_size, thickness)
+                love.graphics.rectangle("fill", cell_size * (x + 0.5), cell_size * y, cell_size, thickness)
             end
             if (cell.down) then
-                rect_cam("fill", cell_size * x, cell_size * (y + 0.5), thickness, cell_size)
+                love.graphics.rectangle("fill", cell_size * x, cell_size * (y + 0.5), thickness, cell_size)
             end
             love.graphics.setColor(0, 0, 1)
-            print_cam(x .. " " .. y, cell_size * x, cell_size * y)
+            love.graphics.print(x .. " " .. y, cell_size * x, cell_size * y)
         end
     end
     love.graphics.setColor(34 / 255, 221 / 255, 136 / 255)
-    rect_cam("fill", px - player_size / 2, py - player_size / 2, player_size, player_size)
+    love.graphics.rectangle("fill", px - player_size / 2, py - player_size / 2, player_size, player_size)
+
+    love.graphics.pop()
 end
