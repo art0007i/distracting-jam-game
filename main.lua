@@ -4,19 +4,6 @@ local a_star = require("a_star")
 local maze = {}
 local size = 50
 
-function dump(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k, v in pairs(o) do
-            if type(k) ~= 'number' then k = '"' .. k .. '"' end
-            s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-    end
-end
-
 for row = 1, size + 1 do
     maze[row] = {}
     for col = 1, size + 1 do
@@ -92,8 +79,23 @@ local px, py = cell_size * 1.5, cell_size * 1.5
 local camx, camy = px, py
 local player_size = 1
 local player_sprite_size = cell_size / 2
+local player_pickup_dist = cell_size / 2
+local held_item = nil
+
+-- each pickup = { type="sprite", x=1, y=2, w=3, h=4 }
+local pickups = {}
 
 local npcx, npcy = cell_size * 5.5, cell_size * 5.5
+
+local mouse_locked = false
+local jumping = false
+local jump_startx, jump_starty = 0, 0
+local jump_radius = 0
+local jump_maxdist = cell_size * 1.75
+local jump_cooldown = 5
+local jump_duration = 1
+local jump_timer = 0
+
 
 -- Normalize two numbers.
 function math.normalize(x, y)
@@ -101,30 +103,68 @@ function math.normalize(x, y)
     if l == 0 then return 0, 0, 0 else return x / l, y / l, l end
 end
 
-local mouse_locked = false
-local jumping = false
-local jump_startx, jump_starty = 0, 0
-local jump_radius = 0
-local jump_speed = cell_size * 3
-local jump_maxdist = cell_size * 1.75
+function intersect(a, b) -- a and b are 'x,y,w,h' tables
+    return a.x < b.x + b.w and
+           a.x + a.w > b.x and
+           a.y < b.y + b.h and
+           a.y + a.h > b.y
+end
+
+function player_pickup_index()
+    for k, v in pairs(pickups) do
+        local s = player_pickup_dist / 2
+        if intersect({x=px-s, y=py-s, w=player_pickup_dist, h=player_pickup_dist}, v) then
+            return k
+        end
+    end
+    return -1
+end
+
+function drop_item()
+    -- handle tasks?
+    table.insert(pickups, held_item)
+    held_item = nil
+end
+
+local images = {}
+
+function img(name)
+    if images[name] ~= nil then return images[name] end
+
+    images[name] = love.graphics.newImage("assets/" .. name .. ".png")
+    return images[name]
+end
 
 function love.keypressed(key, scancode, isrepeat)
     if key == "l" then
-        mouse_locked = !mouse_locked
+        mouse_locked = not mouse_locked
     end
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    if button == 2 then
+    if button == 1 then
+        if held_item ~= nil then
+            drop_item()
+        else
+            local item = player_pickup_index()
+            if (item > 0) then
+                held_item = table.remove(pickups, item)
+            end
+        end
+    end
+    if button == 2 and jump_timer < 0 then
+        table.insert(pickups, { type="cheese", x=50, y=50, w=cell_size/2, h=cell_size/2 })
+
         jumping = true
         jump_startx, jump_starty = px, py
         jump_radius = 0
+        jump_timer = jump_duration
     end
 end
 
 function love.mousereleased(x, y, button, istouch, presses)
     if button == 2 and jumping then
-        jumping = false
+        stop_jump()
     end
 end
 
@@ -205,6 +245,11 @@ function move_player(dx, dy)
     py = ty + ccy
 end
 
+function stop_jump()
+    jumping = false
+    jump_timer = jump_cooldown
+end
+
 function love.mousemoved(x, y, dx, dy, istouch)
     if love.mouse.getRelativeMode() then
         if jumping then
@@ -217,7 +262,6 @@ function love.mousemoved(x, y, dx, dy, istouch)
             end
             if (tx <= cell_size) then tx = cell_size+1 end
             if (ty <= cell_size) then ty = cell_size+1 end
-            print(tx, ty)
             if (tx > cell_size*(size+2)-wall_size) then tx = cell_size*(size+2)-wall_size end
             if (ty > cell_size*(size+2)-wall_size) then ty = cell_size*(size+2)-wall_size end
             px = tx
@@ -245,8 +289,18 @@ local timeloop = 0
 function love.update(dt)
     love.mouse.setRelativeMode(mouse_locked)
 
+    if held_item ~= nil then
+        held_item.x = px - held_item.w / 2
+        held_item.y = py - held_item.h / 2
+    end
+
+    jump_timer = jump_timer - dt
     if jumping then
+        local jump_speed = jump_maxdist * 2 / jump_duration
         jump_radius = math.min(jump_maxdist, jump_radius + jump_speed * dt)
+        if jump_timer < 0 then
+            stop_jump()
+        end
     end
 
     camx = px
@@ -265,15 +319,27 @@ function love.update(dt)
     end
 end
 
+function normalise(a) return math.max(math.min(a, 1), 0) end
+function lerp(a,b,t) return a * (1-t) + b * t end
+
+function colorlerp(a,b,t)
+    return {lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t)}
+end
+
+function draw_item(v)
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(img(v.type), v.x, v.y, v.w / 64, v.h / 64)
+end
+
 function love.draw()
     local w, h = love.graphics.getDimensions()
     love.graphics.push()
     love.graphics.translate(-camx + w / 2, -camy + h / 2)
 
-
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("Press 'L' to lock cursor\nHold right click to jump", -40, -40)
 
+    -- draw maze walls
     for x, cells in ipairs(maze) do
         for y, cell in ipairs(cells) do
             love.graphics.setColor(1, 1, 1)
@@ -290,15 +356,26 @@ function love.draw()
         end
     end
 
+    -- draw jump radius
     if jumping then
-        love.graphics.setColor(0, 0, 1)
+        local larp = normalise((jump_duration - jump_timer*2))
+        love.graphics.setColor(colorlerp({0,0,1}, {1,0,0}, larp))
         love.graphics.circle("fill", jump_startx, jump_starty, jump_radius)
     end
 
-
+    -- draw pickups
+    for k, v in pairs(pickups) do
+        draw_item(v)
+    end
+    if held_item ~= nil then
+        draw_item(held_item)
+    end
+    
+    -- draw plater sprite
     love.graphics.setColor(34 / 255, 221 / 255, 136 / 255)
     love.graphics.rectangle("fill", px - player_sprite_size / 2, py - player_sprite_size / 2, player_sprite_size, player_sprite_size)
 
+    -- draw npc path
     local path = a_star(get_cell(px,py), get_cell(npcx, npcy), maze)
     if path ~= nil then
         local last = path[1]
@@ -314,4 +391,12 @@ function love.draw()
     end
 
     love.graphics.pop()
+
+    -- draw cooldown bar
+    if not jumping and jump_timer > 0 then
+        love.graphics.setColor(.2, .2, .8)
+        local barsize = w/5
+        local fillsize = barsize * jump_timer / jump_cooldown
+        love.graphics.rectangle("fill", w/2-barsize/2, h-h/9, fillsize, h/32)
+    end 
 end
