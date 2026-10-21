@@ -449,6 +449,10 @@ function love.mousemoved(x, y, dx, dy, istouch)
 end
 
 function create_random_task()
+    -- tasks:
+    --   button -- you must push a button
+    --   alt_button -- mouse must push a button
+    --   delivery -- deliver battery to device
     return { type = "button", expire = task_duration }
 end
 
@@ -804,10 +808,11 @@ function love.draw()
     end
     -- draw tasks
     if not gameover then
+        love.graphics.setColor(1,1,1)
         local height = 48
         love.graphics.print("Tasks:", 24, 24, 0, font_scale_inv * 2, font_scale_inv * 2)
         for k, v in pairs(tasks) do
-            love.graphics.print(format_task(v), 20, height, 0, font_scale_inv, font_scale_inv)
+            love.graphics.print(format_task(v), 24, height, 0, font_scale_inv * 2, font_scale_inv*2)
             height = height + 24
         end
     end
