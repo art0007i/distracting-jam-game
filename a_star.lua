@@ -7,7 +7,6 @@ function key(pos)
     return pos.x .. "," .. pos.y
 end
 
-local size = 50
 function inbounds(x, y)
     if x < 1 or y < 1 then return false end
     if x > size + 1 or y > size + 1 then return false end
