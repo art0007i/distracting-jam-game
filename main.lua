@@ -742,6 +742,7 @@ function fail_task(v)
     local sfx = snd("task_fail")
     sfx:stop()
     sfx:play()
+    if screenshake_time < 0 then screenshake_time = 0 end
     screenshake_time = screenshake_time + 0.5
     mouse_jump_interval = mouse_jump_interval * 0.9
 end
