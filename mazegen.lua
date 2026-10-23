@@ -7,7 +7,6 @@ end
 
 function is_visited(x, y, maze, size)
     if not in_maze(x, y, size) then return true end
-    print(x,y,size)
     return maze[x][y].visited
 end
 

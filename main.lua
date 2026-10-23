@@ -1,4 +1,3 @@
-local inspect = require("inspect")
 local a_star = require("a_star")
 local mazegen = require("mazegen")
 
@@ -10,15 +9,13 @@ function reset_settings()
     camera_smooth = 1
     zoom_modifier = 0.5
     mouse_speed_mod = 1
-    task_interval = 10 -- todo
-    task_duration = 30 -- todo
-    max_tasks = 5 -- todo
     maze_real_size = 10
     jump_cooldown = 5
     music_volume = 0.25
     sfx_volume = 0.25
     showhints = 1
     cheese_count = 1
+    cursor_speed = 1
 end
 
 reset_settings()
@@ -52,10 +49,11 @@ function snd_cache(name, loop)
     end
     return sounds[name]
 end
+
 function snd(name, loop)
     local sound = snd_cache(name, loop)
     if loop then
-        sound:setVolume(music_volume) 
+        sound:setVolume(music_volume)
     else
         sound:setVolume(sfx_volume)
     end
@@ -78,7 +76,8 @@ local strings = {
     showhints = "Explain Tasks",
     cheese_count = "Cheese Count",
     dyncam = "Dynamic Camera",
-    camera_smooth = "Camera Smoothing"
+    camera_smooth = "Camera Smoothing",
+    cursor_speed = "Cursor Speed"
 
 }
 function l(txt)
@@ -118,15 +117,17 @@ function set_menu_page(page)
     if page == "main" then
         table.insert(pickups, { type = "menu_button", x = 80, y = 330, w = 120, h = 40, page = "credits" })
         table.insert(pickups, { type = "menu_button", x = 330, y = 330, w = 120, h = 40, page = "settings" })
-        table.insert(pickups, { type = "cheese", x = cell_size * 6, y = cell_size * 8, w = cell_size * 1.5, h = cell_size * 1.5 })
+        table.insert(pickups,
+            { type = "cheese", x = cell_size * 6, y = cell_size * 8, w = cell_size * 1.5, h = cell_size * 1.5 })
     end
     if page == "settings" then
         -- todo create sliders?
-        table.insert(pickups, { type = "menu_button", x = 330, y = 410, w = 120, h = 40, page = "main" })
+        table.insert(pickups, { type = "menu_button", x = 360, y = 440, w = 120, h = 40, page = "main" })
         table.insert(pickups, { type = "menu_button", x = 40, y = 440, w = 120, h = 40, page = "reset_all" })
         add_setting(250, 160, "music_volume", 0, 1)
         add_setting(250, 160, "sfx_volume", 0, 1)
         add_setting(250, 40, "zoom_modifier", 0, 1)
+        add_setting(250, 40, "cursor_speed", 0.1, 2)
         -- add_setting(250, 40, "dyncam", 0, 1, 0) -- its bad... and i dont have space for other settings
         add_setting(250, 40, "camera_smooth", 0, 1, 0)
         add_setting(250, 160, "showhints", 0, 1, 0)
@@ -203,6 +204,8 @@ function reset_game(new_level)
     camzoom = 2
 
     screenshake_time = 0
+    task_interval = 10
+    task_duration = 30
 
     player_size = 1
     player_sprite_size = cell_size / 2
@@ -243,14 +246,21 @@ function reset_game(new_level)
     end
 
     if level == "maze" then
-        table.insert(pickups, { type = "cheese", x = cell_size * 1.25, y = cell_size * 1.25, w = cell_size / 2, h =
-        cell_size / 2 })
+        table.insert(pickups, {
+            type = "cheese",
+            x = cell_size * 1.25,
+            y = cell_size * 1.25,
+            w = cell_size / 2,
+            h =
+                cell_size / 2
+        })
 
-        for i = 1, cheese_count-1, 1 do
+        for i = 1, cheese_count - 1, 1 do
             local pos = get_safe_space()
             local sz = cell_size * 0.5
             local nudge = (cell_size - sz) / 2
-            table.insert(pickups, { type="cheese", x=((pos.x) * cell_size) + nudge, y=(pos.y * cell_size) + nudge, w=sz, h=sz })
+            table.insert(pickups,
+                { type = "cheese", x = ((pos.x) * cell_size) + nudge, y = (pos.y * cell_size) + nudge, w = sz, h = sz })
         end
     end
 
@@ -283,20 +293,19 @@ end
 function player_pickup_index()
     for k, v in pairs(pickups) do
         if v.nopickup == true then
-            goto continue
+        else
+            local s = player_pickup_dist / 2
+            if intersect({ x = px - s, y = py - s, w = player_pickup_dist, h = player_pickup_dist }, v) then
+                return k
+            end
         end
-        local s = player_pickup_dist / 2
-        if intersect({ x = px - s, y = py - s, w = player_pickup_dist, h = player_pickup_dist }, v) then
-            return k
-        end
-        ::continue::
     end
     return -1
 end
 
 function drop_item()
     if (held_item ~= nil) then
-        table.insert(pickups, held_item) 
+        table.insert(pickups, held_item)
         held_item = nil
     end
 end
@@ -458,6 +467,9 @@ end
 
 function love.mousemoved(x, y, dx, dy, istouch)
     if love.mouse.getRelativeMode() then
+        dx = dx * cursor_speed
+        dy = dy * cursor_speed
+
         if level == "maze" and dyncam == 1 then
             camx = camx + dx * 1
             camy = camy + dy * 1
@@ -506,45 +518,49 @@ end
 function get_safe_space()
     local tries = 100
     local unsafe = true
-    local rx, ry = 0,0
+    local rx, ry = 0, 0
 
     local pcell = get_cell(px, py)
     local ecell = get_cell(npcx, npcy)
     while unsafe and tries > 0 do
         tries = tries - 1
-        rx = math.random(size+1)
-        ry = math.random(size+1)
+        rx = math.random(size + 1)
+        ry = math.random(size + 1)
 
+        local skip = false
         for k, v in pairs(pickups) do
-            if  cell_key(get_item_cell(v)) == cell_key({x=rx,y=ry}) then
-                goto continue
+            if cell_key(get_item_cell(v)) == cell_key({ x = rx, y = ry }) then
+                skip = true
             end
         end
-        
-        local _, _, len = math.normalize(pcell.x - rx, pcell.y - ry)
-        local _, _, len2 = math.normalize(ecell.x - rx, ecell.y - ry)
-        if len > size/2 and len2 > size/2 then
-            unsafe = false
+        if skip then
+        else
+            local _, _, len = math.normalize(pcell.x - rx, pcell.y - ry)
+            local _, _, len2 = math.normalize(ecell.x - rx, ecell.y - ry)
+            if len > size / 2 and len2 > size / 2 then
+                unsafe = false
+            end
         end
-        ::continue::
     end
-    
-    return {x=rx, y=ry}
+
+    return { x = rx, y = ry }
 end
 
-function add_task_item(type,task,size,nopick)
+function add_task_item(type, task, size, nopick)
     if nopick == nil then nopick = false end
     local pos = get_safe_space()
     local sz = cell_size * size
     local nudge = (cell_size - sz) / 2
-    table.insert(pickups, { type=type, x=((pos.x) * cell_size) + nudge, y=(pos.y * cell_size) + nudge, w=sz, h=sz, task=task, nopickup = nopick })
+    table.insert(pickups,
+        { type = type, x = ((pos.x) * cell_size) + nudge, y = (pos.y * cell_size) + nudge, w = sz, h = sz, task = task, nopickup =
+        nopick })
 end
 
-local colors = { {.8,0,0}, {0,.8,0}, {0,0,.8}, {.8,.8,0}, {.8,0,.8}, {0,.8,.8} }
+local colors = { { .8, 0, 0 }, { 0, .8, 0 }, { 0, 0, .8 }, { .8, .8, 0 }, { .8, 0, .8 }, { 0, .8, .8 } }
 
 function get_task_color()
     if #colors == 0 then
-        return {math.random(), math.random(), math.random(), true}
+        return { math.random(), math.random(), math.random(), true }
     end
     local rng = math.random(#colors)
     return table.remove(colors, rng)
@@ -557,11 +573,11 @@ function create_random_task()
     --   delivery -- deliver battery to device
     local rng = math.random(3)
     if rng == 1 then
-        local task = { type = "button", expire = task_duration, exp1 = task_duration, color={134 / 255, 221 / 255, 136 / 255,true} }
+        local task = { type = "button", expire = task_duration, exp1 = task_duration, color = { 134 / 255, 221 / 255, 136 / 255, true } }
         add_task_item("push_button", task, 0.5)
         return task
     elseif rng == 2 then
-        local task = { type = "alt_button", expire = task_duration, exp1 = task_duration, color={1,1,1,true} }
+        local task = { type = "alt_button", expire = task_duration, exp1 = task_duration, color = { 1, 1, 1, true } }
         add_task_item("mouse_button", task, 0.5)
         return task
     elseif rng == 3 then
@@ -628,11 +644,11 @@ function format_time(v)
     v = math.floor((v % 1) * 100)
 
     if hours > 0 then
-        return string.format("%d:%02d:%02d.%02d", hours,minutes,seconds,v)
+        return string.format("%d:%02d:%02d.%02d", hours, minutes, seconds, v)
     elseif minutes > 0 then
-        return string.format("%d:%02d.%02d", minutes,seconds,v)
+        return string.format("%d:%02d.%02d", minutes, seconds, v)
     else
-        return string.format("%d.%02d", seconds,v)
+        return string.format("%d.%02d", seconds, v)
     end
 end
 
@@ -682,10 +698,11 @@ function love.update(dt)
         if (gameovertime < 0) then
             local ate = false
             for k, v in pairs(all_items()) do
-                if v.type ~= "cheese" then goto continue end
-                ate = true
-                delete_item(v)
-                ::continue::
+                if v.type ~= "cheese" then
+                else
+                    ate = true
+                    delete_item(v)
+                end
             end
             if ate then
                 snd("nom"):play()
@@ -712,7 +729,7 @@ function love.update(dt)
         if speedup_time < 0 then
             speedup_time = speedup_time + 60
             task_duration = math.max(5, task_duration - 1)
-            task_interval = math.max(5, task_interval - 1)
+            task_interval = math.max(2, task_interval - 1)
         end
     end
 
@@ -722,7 +739,7 @@ function love.update(dt)
             held_item.x = clamp(px - held_item.w / 2, held_item.parent.x, held_item.parent.x + 80)
             held_item.y = held_item.parent.y
             _G[held_item.parent.prop] = (((held_item.x - held_item.parent.x) / 80) * (held_item.max - held_item.min)) +
-            held_item.min
+                held_item.min
             if held_item.parent.decimal == 0 then
                 _G[held_item.parent.prop] = math.floor(_G[held_item.parent.prop] + 0.5) -- epic math.round impl from love2d forum (just add 0.5)
             end
@@ -740,8 +757,6 @@ function love.update(dt)
                     end
                 end
             end
-            print(held_item.parent.prop)
-            print(_G[held_item.parent.prop])
         else
             held_item.x = px - held_item.w / 2
             held_item.y = py - held_item.h / 2
@@ -760,12 +775,12 @@ function love.update(dt)
 
     if level == "mainmenu" then
         for k, v in pairs(all_items()) do
-            if v.type ~= "cheese" then goto continue end
-
-            if intersect(v, mainmenurect) then
-                reset_game("maze")
+            if v.type ~= "cheese" then
+            else
+                if intersect(v, mainmenurect) then
+                    reset_game("maze")
+                end
             end
-            ::continue::
         end
     end
 
@@ -789,15 +804,15 @@ function love.update(dt)
             timeloop = timeloop - mouse_interval
             local shortest_path = nil
             for k, v in pairs(all_items()) do
-                if v.type ~= "cheese" then goto continue end
-
-                local path = a_star(get_item_cell(v), get_cell(npcx, npcy), maze)
-                if path then
-                    if not shortest_path or #path < #shortest_path then
-                        shortest_path = path
+                if v.type ~= "cheese" then
+                else
+                    local path = a_star(get_item_cell(v), get_cell(npcx, npcy), maze)
+                    if path then
+                        if not shortest_path or #path < #shortest_path then
+                            shortest_path = path
+                        end
                     end
                 end
-                ::continue::
             end
             current_path = shortest_path
             if shortest_path then
@@ -814,18 +829,21 @@ function love.update(dt)
         local to_eat = {}
         local total_cheese = 0
         for k, v in pairs(all_items()) do
-            if v.type ~= "cheese" then 
+            local skip = false
+            if v.type ~= "cheese" then
                 if v.type == "mouse_button" and cell_key(get_item_cell(v)) == npc_key then
                     complete_task(v.task)
                 end
-                goto continue
+                skip = true
             end
 
-            total_cheese = total_cheese + 1
-            if cell_key(get_item_cell(v)) == npc_key then
-                table.insert(to_eat, v)
+            if skip then
+            else
+                total_cheese = total_cheese + 1
+                if cell_key(get_item_cell(v)) == npc_key then
+                    table.insert(to_eat, v)
+                end
             end
-            ::continue::
         end
         if not gameover and #to_eat == total_cheese then
             gameover = true
@@ -849,9 +867,9 @@ function draw_item(v)
         local max = v.task.exp1
         local min = v.task.expire
         local t = min / max
-        local col = colorlerp({1,0,0}, {0,1,0}, t)
+        local col = colorlerp({ 1, 0, 0 }, { 0, 1, 0 }, t)
         love.graphics.setColor(col)
-        love.graphics.arc("fill", v.x + v.w/2, v.y + v.h/2, math.max(v.w, v.h) / 1.5, 0, math.pi * 2 * t)
+        love.graphics.arc("fill", v.x + v.w / 2, v.y + v.h / 2, math.max(v.w, v.h) / 1.5, 0, math.pi * 2 * t)
 
         local c = v.task.color
         love.graphics.setColor(c[1], c[2], c[3])
@@ -867,7 +885,7 @@ function draw_item(v)
         love.graphics.setColor(0, 0, 0)
         local fs = font_scale_inv * 2
         local w1 = font:getWidth(l(v.page)) * fs
-        love.graphics.print(l(v.page), v.x - w1/2 + v.w/2, v.y + 5, 0, fs, fs)
+        love.graphics.print(l(v.page), v.x - w1 / 2 + v.w / 2, v.y + 5, 0, fs, fs)
     end
     if v.type == "hyperlink" then
         love.graphics.setColor(0, 0, 0)
@@ -881,7 +899,7 @@ function draw_item(v)
         love.graphics.setColor(0, 0, 0)
         local w = font:getWidth(l(v.prop)) * font_scale_inv * 1.5
         love.graphics.print(l(v.prop), v.x - w, v.y + 10, 0, font_scale_inv * 1.5, font_scale_inv * 1.5)
-        local st = string.format("%."..v.decimal.."f", _G[v.prop])
+        local st = string.format("%." .. v.decimal .. "f", _G[v.prop])
         if v.prop == "showhints" or v.prop == "dyncam" or v.prop == "camera_smooth" then
             if _G[v.prop] == 1 then
                 st = "Yes"
@@ -890,9 +908,9 @@ function draw_item(v)
             end
         end
         if v.prop == "maze_real_size" then
-            st  = string.format("%."..v.decimal.."f", _G[v.prop] + 1)
+            st = string.format("%." .. v.decimal .. "f", _G[v.prop] + 1)
         end
-        love.graphics.print(st, v.x+120, v.y+10, 0, font_scale_inv * 1.5, font_scale_inv * 1.5)
+        love.graphics.print(st, v.x + 120, v.y + 10, 0, font_scale_inv * 1.5, font_scale_inv * 1.5)
     end
 end
 
@@ -912,13 +930,12 @@ function love.load()
     love.graphics.setFont(font)
 end
 
-
 function print_right(text, x, y, rot, size)
     if rot == nil then rot = 0 end
     if size == nil then size = 1 end
     local font = love.graphics.getFont()
     local w = font:getWidth(text) * font_scale_inv * size
-    love.graphics.print(text, x-w, y, rot, font_scale_inv * size, font_scale_inv * size)
+    love.graphics.print(text, x - w, y, rot, font_scale_inv * size, font_scale_inv * size)
 end
 
 local rotation = 0
@@ -931,8 +948,8 @@ function love.draw()
     love.graphics.push()
     love.graphics.scale(camzoom)
     if screenshake_time > 0 then
-        local shakex = ((math.random()*2)-1) * 15 * screenshake_time
-        local shakey = ((math.random()*2)-1) * 15 * screenshake_time
+        local shakex = ((math.random() * 2) - 1) * 15 * screenshake_time
+        local shakey = ((math.random() * 2) - 1) * 15 * screenshake_time
         love.graphics.translate(shakex, shakey)
     end
     love.graphics.translate(-camx + w / (2 * camzoom), -camy + h / (2 * camzoom))
@@ -1061,15 +1078,18 @@ function love.draw()
                 end
             end
             if has_btn then
-                love.graphics.print("Push the push button by clicking it.", 24, height, 0, font_scale_inv * 2, font_scale_inv*2)
+                love.graphics.print("Push the push button by clicking it.", 24, height, 0, font_scale_inv * 2,
+                    font_scale_inv * 2)
                 height = height + 24
             end
             if has_btn2 then
-                love.graphics.print("Deliver the cookie to the mouse.", 24, height, 0, font_scale_inv * 2, font_scale_inv*2)
+                love.graphics.print("Deliver the cookie to the mouse.", 24, height, 0, font_scale_inv * 2,
+                    font_scale_inv * 2)
                 height = height + 24
             end
             if has_device then
-                love.graphics.print("Deliver the battery to the same colored device.", 24, height, 0, font_scale_inv * 2, font_scale_inv*2)
+                love.graphics.print("Deliver the battery to the same colored device.", 24, height, 0, font_scale_inv * 2,
+                    font_scale_inv * 2)
                 height = height + 24
             end
         end
@@ -1083,12 +1103,12 @@ function love.draw()
                 height = height + 24
             end
         end
-        ]]--
+        ]] --
 
         -- draw time and completion
         love.graphics.setColor(.2, .8, 0)
-        print_right(format_time(total_time) ..  " time survived", w-24, 24, 0, 1.5)
-        print_right(complete_tasks ..  " tasks completed", w-24, 48, 0, 1.5)
+        print_right(format_time(total_time) .. " time survived", w - 24, 24, 0, 1.5)
+        print_right(complete_tasks .. " tasks completed", w - 24, 48, 0, 1.5)
     end
 
     if gameover and gameovertime < -0.5 then

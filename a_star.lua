@@ -95,9 +95,8 @@ function a_star(start, goal, maze)
 
         for k, v in pairs(dirs) do
             if wall_intersect(current.x, current.y, v.x, v.y, maze) then
-                goto continue
-            end
-
+            
+        else
             local neighbor = { x = current.x + v.x, y = current.y + v.y }
             local tentative_g_score = g_score[key(current)] + 1
             local neighbor_g = g_score[key(neighbor)]
@@ -110,8 +109,7 @@ function a_star(start, goal, maze)
                 
                 open_set[key(neighbor)] = neighbor
             end
-
-            ::continue::
+        end
         end
     end
 
