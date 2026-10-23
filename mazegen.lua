@@ -7,6 +7,7 @@ end
 
 function is_visited(x, y, maze, size)
     if not in_maze(x, y, size) then return true end
+    print(x,y,size)
     return maze[x][y].visited
 end
 
@@ -65,8 +66,8 @@ function generate(size)
     local maze = populate(size)
     heads = {
         {
-            x = size / 2,
-            y = size / 2
+            x = math.floor(size / 2),
+            y = math.floor(size / 2)
         }
     }
 
