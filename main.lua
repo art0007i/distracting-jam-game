@@ -42,7 +42,11 @@ function clamp01(a) return clamp(a, 0, 1) end
 function lerp(a, b, t) return a * (1 - t) + b * t end
 
 function colorlerp(a, b, t)
-    return { lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t) }
+    local tab = { lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t) }
+    if a[4] and b[4] then
+        tab[4] = lerp(a[4], b[4], t)
+    end
+    return tab
 end
 
 -- ez asset cache stuff
@@ -118,6 +122,7 @@ end
 
 -- possible pages main, settings, credits
 function set_menu_page(page)
+    total_time = 0
     if page == "reset_all" then
         reset_settings()
         set_menu_page("settings")
@@ -293,7 +298,7 @@ function reset_game(new_level)
     timeloop = 0
     current_path = nil
 
-    task_timer = task_interval * task_interval_multiplier
+    task_timer = task_interval / task_interval_multiplier
 
     if level == "mainmenu" then
         px, py = cell_size * 11, cell_size * 11
@@ -920,7 +925,7 @@ function love.update(dt)
 
         task_timer = task_timer - dt
         if task_timer < 0 then
-            task_timer = task_timer + (task_interval*task_interval_multiplier)
+            task_timer = task_timer + (task_interval/task_interval_multiplier)
             table.insert(tasks, create_random_task())
         end
 
@@ -1115,13 +1120,17 @@ function love.draw()
         end
 
         if menupage == "main" then
+            love.graphics.setColor(colorlerp({0,0,1,0}, {0,0,1,1}, (total_time-5) / 10))
+            love.graphics.printf("To get out\nof the walls\nyou have to\nJUMP...",
+                402, 410, 300, "center", 0, font_scale_inv, font_scale_inv)
+
             love.graphics.setColor(1, 1, 1)
             love.graphics.draw(img("logo"), cell_size * 6.5, cell_size * 5, 0, .33, .33, 512, 512)
             love.graphics.setColor(0, 0, 0)
             love.graphics.print("Give the cheese to the mouse to start.",
                 150, 300, 0, font_scale_inv, font_scale_inv)
             love.graphics.print(
-                "Press 'L' to lock cursor\nHold right click to jump\nPress left click to grab/drop item\nFailing to complete a task will make the mouse faster\nThe mouse follows the nearest cheese\nDon't let it eat all your cheese",
+                "Press 'L' to lock cursor\nHold right click to JUMP\nPress left click to GRAB/DROP item\nFailing to complete a task will make the mouse faster\nThe mouse follows the nearest cheese\nDon't let it eat all your cheese",
                 50, 388, 0, font_scale_inv, font_scale_inv)
         end
         if menupage == "credits" then
@@ -1130,7 +1139,7 @@ function love.draw()
         end
         if menupage == "gameplay_settings" then
             love.graphics.setColor(0, 0, 0)
-            love.graphics.print("Press C to copy these settings.\nPress V to paste these settings.", 100, 330, 0,
+            love.graphics.print("Press 'C' to copy these settings.\nPress 'V' to paste these settings.", 100, 330, 0,
                 font_scale_inv * 1.5, font_scale_inv * 1.5)
         end
         -- love.graphics.rectangle("fill", mainmenurect.x, mainmenurect.y, mainmenurect.w, mainmenurect.h)
@@ -1269,7 +1278,7 @@ function love.draw()
     end
     if showhint > 0 then
         love.graphics.setColor(1, 0, 0)
-        love.graphics.print("Use in-game cursor to click\n(press L to lock cursor)", love.mouse.getX() - 100,
+        love.graphics.print("Use in-game cursor to click\n(press 'L' to lock cursor)", love.mouse.getX() - 100,
             love.mouse.getY() + 20, 0, font_scale_inv * 2  * camzoom, font_scale_inv * 2  * camzoom)
     end
 
