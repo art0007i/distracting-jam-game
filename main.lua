@@ -8,17 +8,32 @@ function reset_settings()
     dyncam = 0
     camera_smooth = 1
     zoom_modifier = 0.5
-    mouse_speed_mod = 1
-    maze_real_size = 10
-    jump_cooldown = 5
     music_volume = 0.25
     sfx_volume = 0.25
     showhints = 1
-    cheese_count = 1
     cursor_speed = 1
 end
 
+function reset_gameplay_settings()
+    cheese_count = 1
+    jump_cooldown = 5
+    maze_size = 10
+    mouse_speed_mod = 1
+    task_interval_multiplier = 1
+    task_duration_multiplier = 1
+end
+
+local gameplay_settings = {
+    "cheese_count",
+    "jump_cooldown",
+    "maze_size",
+    "mouse_speed_mod",
+    "task_interval_multiplier",
+    "task_duration_multiplier",
+}
+
 reset_settings()
+reset_gameplay_settings()
 
 function clamp(val, min, max) return math.max(math.min(val, max), min) end
 
@@ -63,22 +78,25 @@ end
 local strings = {
     credits = "Credits",
     settings = "Options",
-    main = "Back",
+    main = "Main Menu",
     mainmenu = "Main Menu",
     maze = "In Maze",
     zoom_modifier = "Zoom",
     mouse_speed_mod = "Mouse Speed",
-    maze_real_size = "Maze Size",
+    maze_size = "Maze Size",
     jump_cooldown = "Jump Cooldown",
-    reset_all = "Reset All",
+    reset_all = "Reset Page",
     music_volume = "Music Volume",
     sfx_volume = "Sound Volume",
     showhints = "Explain Tasks",
     cheese_count = "Cheese Count",
     dyncam = "Dynamic Camera",
     camera_smooth = "Camera Smoothing",
-    cursor_speed = "Cursor Speed"
-
+    cursor_speed = "Cursor Speed",
+    gameplay_settings = "Balancing",
+    reset_gameplay = "Reset Page",
+    task_interval_multiplier = "Task Frequency Mult",
+    task_duration_multiplier = "Task Duration Mult",
 }
 function l(txt)
     if strings[txt] then return strings[txt] end
@@ -100,7 +118,7 @@ end
 
 -- possible pages main, settings, credits
 function set_menu_page(page)
-    if (page == "reset_all") then
+    if page == "reset_all" then
         reset_settings()
         set_menu_page("settings")
         for k, v in pairs(sounds) do
@@ -110,6 +128,16 @@ function set_menu_page(page)
         end
         return
     end
+    if page == "reset_gameplay" then
+        reset_gameplay_settings()
+        set_menu_page("gameplay_settings")
+        return
+    end
+    
+    export_msg_time = 0
+    export_msg_color = {0,1,0}
+    export_msg_str = ""
+
     setting_height = 40
     held_item = nil
     pickups = {}
@@ -122,8 +150,9 @@ function set_menu_page(page)
     end
     if page == "settings" then
         -- todo create sliders?
-        table.insert(pickups, { type = "menu_button", x = 360, y = 440, w = 120, h = 40, page = "main" })
-        table.insert(pickups, { type = "menu_button", x = 40, y = 440, w = 120, h = 40, page = "reset_all" })
+        table.insert(pickups, { type = "menu_button", x = 330, y = 440, w = 150, h = 40, page = "main" })
+        table.insert(pickups, { type = "menu_button", x = 330, y = 400, w = 150, h = 40, page = "gameplay_settings" })
+        table.insert(pickups, { type = "menu_button", x = 40, y = 440, w = 150, h = 40, page = "reset_all" })
         add_setting(250, 160, "music_volume", 0, 1)
         add_setting(250, 160, "sfx_volume", 0, 1)
         add_setting(250, 40, "zoom_modifier", 0, 1)
@@ -131,10 +160,17 @@ function set_menu_page(page)
         -- add_setting(250, 40, "dyncam", 0, 1, 0) -- its bad... and i dont have space for other settings
         add_setting(250, 40, "camera_smooth", 0, 1, 0)
         add_setting(250, 160, "showhints", 0, 1, 0)
+    end
+    if page == "gameplay_settings" then
+        table.insert(pickups, { type = "menu_button", x = 330, y = 400, w = 150, h = 40, page = "settings" })
+        table.insert(pickups, { type = "menu_button", x = 330, y = 440, w = 150, h = 40, page = "main" })
+        table.insert(pickups, { type = "menu_button", x = 40, y = 440, w = 150, h = 40, page = "reset_gameplay" })
         add_setting(250, 80, "mouse_speed_mod", 1, 5)
-        add_setting(250, 120, "maze_real_size", 5, 50, 0)
+        add_setting(250, 120, "maze_size", 5, 50, 0)
         add_setting(250, 160, "jump_cooldown", 0, 30)
         add_setting(250, 160, "cheese_count", 1, 5, 0)
+        add_setting(250, 160, "task_interval_multiplier", 0.25, 10)
+        add_setting(250, 160, "task_duration_multiplier", 0.25, 10)
     end
     if page == "credits" then
         -- back button
@@ -193,9 +229,29 @@ function reset_game(new_level)
 
     size = 10
     if level == "maze" then
-        size = maze_real_size
+        size = maze_size
     end
     maze = mazegen.generate(size)
+    if new_level == "mainmenu" then
+        for k, v in pairs(maze) do
+            for k2, v2 in pairs(v) do
+
+                if k2 ~= size+1 then
+                    v2.down = true
+                end
+                if k ~= size+1 then
+                    v2.right = true
+                end
+
+                if k2 == 9 and k > 9 then
+                    v2.down = false
+                end
+                if k == 9 and k2 > 9 then
+                    v2.right = false
+                end
+            end
+        end
+    end
 
     cell_size = 40
     wall_size = 4
@@ -237,7 +293,7 @@ function reset_game(new_level)
     timeloop = 0
     current_path = nil
 
-    task_timer = task_interval
+    task_timer = task_interval * task_interval_multiplier
 
     if level == "mainmenu" then
         px, py = cell_size * 11, cell_size * 11
@@ -310,12 +366,54 @@ function drop_item()
     end
 end
 
+-- shoutout this guy doing way too much reasearch into how to trim a string http://lua-users.org/wiki/StringTrim
+function trim(s)
+   return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+function parse_setting(text)
+    local txt = trim(text)
+    local equal = string.find(txt, "=", 1, true)
+    if equal == nil then return end
+    local name = trim(string.sub(txt, 0, equal-1))
+    local value = trim(string.sub(txt, equal+1))
+    local val = tonumber(value)
+    if val == nil then return end
+    _G[name] = val
+end
+
 function love.keypressed(key, scancode, isrepeat)
     if key == "l" then
         mouse_locked = not mouse_locked
     end
     if key == "r" then
         reset_game("mainmenu")
+    end
+    if key == "c" and menupage == "gameplay_settings" then
+        local export_str = "==== A Mouse's Maze Settings ====\n"
+        for k, v in pairs(gameplay_settings) do
+            export_str = export_str .. v .. "=" .. _G[v] .. "\n"
+        end
+        export_str = export_str.."=================================\n"
+        print(export_str)
+        love.system.setClipboardText(export_str)
+        export_msg_color = {0,1,0}
+        export_msg_time = 1
+        export_msg_str = "Copied settings to clipboard!"
+    end
+    if key == "v" and menupage == "gameplay_settings" then
+        local settings = love.system.getClipboardText()
+        while true do
+            local newline = string.find(settings, "\n", 1, true)
+            if newline == nil then break end
+
+            local line = string.sub(settings, 0, newline - 1)
+            parse_setting(line)
+            settings = string.sub(settings, newline + 1)
+        end
+        parse_setting(settings)
+
+        set_menu_page("gameplay_settings")
     end
 end
 
@@ -479,11 +577,12 @@ function love.mousemoved(x, y, dx, dy, istouch)
             return
         end
 
-        if jumping or level == "mainmenu" then
+        local ismain = level == "mainmenu" and menupage ~= "main"
+        if jumping or ismain then
             local tx = px + dx
             local ty = py + dy
             local dxn, dyn, len = math.normalize(tx - jump_startx, ty - jump_starty)
-            if level == "mainmenu" and not jumping then
+            if ismain and not jumping then
                 len = -math.huge
             end
             if len > jump_radius then
@@ -552,8 +651,16 @@ function add_task_item(type, task, size, nopick)
     local sz = cell_size * size
     local nudge = (cell_size - sz) / 2
     table.insert(pickups,
-        { type = type, x = ((pos.x) * cell_size) + nudge, y = (pos.y * cell_size) + nudge, w = sz, h = sz, task = task, nopickup =
-        nopick })
+        {
+            type = type,
+            x = ((pos.x) * cell_size) + nudge,
+            y = (pos.y * cell_size) + nudge,
+            w = sz,
+            h = sz,
+            task = task,
+            nopickup =
+                nopick
+        })
 end
 
 local colors = { { .8, 0, 0 }, { 0, .8, 0 }, { 0, 0, .8 }, { .8, .8, 0 }, { .8, 0, .8 }, { 0, .8, .8 } }
@@ -571,19 +678,25 @@ function create_random_task()
     --   button -- you must push a button
     --   alt_button -- mouse must push a button
     --   delivery -- deliver battery to device
-    local rng = math.random(3)
+    --   cheese_delivery -- put the cheese in this location
+    local rng = math.random(4)
+    local exp = task_duration * task_duration_multiplier
     if rng == 1 then
-        local task = { type = "button", expire = task_duration, exp1 = task_duration, color = { 134 / 255, 221 / 255, 136 / 255, true } }
+        local task = { type = "button", expire = exp, exp1 = exp, color = { 134 / 255, 221 / 255, 136 / 255, true } }
         add_task_item("push_button", task, 0.5)
         return task
     elseif rng == 2 then
-        local task = { type = "alt_button", expire = task_duration, exp1 = task_duration, color = { 1, 1, 1, true } }
+        local task = { type = "alt_button", expire = exp, exp1 = exp, color = { 1, 1, 1, true } }
         add_task_item("mouse_button", task, 0.5)
         return task
     elseif rng == 3 then
-        local task = { type = "delivery", expire = task_duration, exp1 = task_duration, color = get_task_color() }
+        local task = { type = "delivery", expire = exp, exp1 = exp, color = get_task_color() }
         add_task_item("device", task, 0.75, true)
         add_task_item("battery", task, 0.5)
+        return task
+    elseif rng == 4 then
+        local task = { type = "cheese_delivery", expire = exp, exp1 = exp, color = { 1, 1, 1, true } }
+        add_task_item("cheese_task", task, 0.75, true)
         return task
     else
         print("ERROR: tried generating invalid task " .. rng)
@@ -591,6 +704,7 @@ function create_random_task()
 end
 
 function delete_task(v)
+    v.consumed = true
     for k, val in pairs(all_items()) do
         if val.task == v then
             delete_item(val)
@@ -609,6 +723,7 @@ function delete_task(v)
 end
 
 function complete_task(v)
+    if v.consumed then return end
     delete_task(v)
     local sfx = snd("task_success")
     sfx:stop()
@@ -617,6 +732,7 @@ function complete_task(v)
 end
 
 function fail_task(v)
+    if v.consumed then return end
     delete_task(v)
     local sfx = snd("task_fail")
     sfx:stop()
@@ -655,6 +771,7 @@ end
 local mainmenurect = { x = 150, y = 150, w = 10, h = 10 }
 
 function love.update(dt)
+    export_msg_time = export_msg_time - dt
     screenshake_time = screenshake_time - dt
     love.mouse.setRelativeMode(mouse_locked)
 
@@ -716,6 +833,16 @@ function love.update(dt)
         local held_key = cell_key(get_item_cell(held_item))
         for k, v in pairs(pickups) do
             if v.type == "device" and v.task == held_item.task and cell_key(get_item_cell(v)) == held_key then
+                complete_task(v.task)
+                break
+            end
+        end
+    end
+    -- handle deliver_cheese task
+    if (held_item ~= nil and held_item.type == "cheese") then
+        local held_key = cell_key(get_item_cell(held_item))
+        for k, v in pairs(pickups) do
+            if v.type == "cheese_task" and cell_key(get_item_cell(v)) == held_key then
                 complete_task(v.task)
                 break
             end
@@ -793,7 +920,7 @@ function love.update(dt)
 
         task_timer = task_timer - dt
         if task_timer < 0 then
-            task_timer = task_timer + task_interval
+            task_timer = task_timer + (task_interval*task_interval_multiplier)
             table.insert(tasks, create_random_task())
         end
 
@@ -907,7 +1034,7 @@ function draw_item(v)
                 st = "No"
             end
         end
-        if v.prop == "maze_real_size" then
+        if v.prop == "maze_size" then
             st = string.format("%." .. v.decimal .. "f", _G[v.prop] + 1)
         end
         love.graphics.print(st, v.x + 120, v.y + 10, 0, font_scale_inv * 1.5, font_scale_inv * 1.5)
@@ -976,10 +1103,19 @@ function love.draw()
             end
         end
     else
+        -- white bg
         love.graphics.setColor(1, 1, 1)
         love.graphics.rectangle("fill", cell_size, cell_size, cell_size * (size + 1), cell_size * (size + 1))
+    
+        -- tutorial wall
+        if menupage == "main" then
+            love.graphics.setColor(0,0,0)
+            love.graphics.rectangle("fill", cell_size*10 - wall_size, cell_size*10 - wall_size, wall_size, cell_size*3)
+            love.graphics.rectangle("fill", cell_size*10 - wall_size, cell_size*10 - wall_size, cell_size*3, wall_size)
+        end
 
         if menupage == "main" then
+            love.graphics.setColor(1, 1, 1)
             love.graphics.draw(img("logo"), cell_size * 6.5, cell_size * 5, 0, .33, .33, 512, 512)
             love.graphics.setColor(0, 0, 0)
             love.graphics.print("Give the cheese to the mouse to start.",
@@ -991,6 +1127,11 @@ function love.draw()
         if menupage == "credits" then
             love.graphics.setColor(0, 0, 0)
             love.graphics.print("Everything else by art0007i", 100, 330, 0, font_scale_inv * 2, font_scale_inv * 2)
+        end
+        if menupage == "gameplay_settings" then
+            love.graphics.setColor(0, 0, 0)
+            love.graphics.print("Press C to copy these settings.\nPress V to paste these settings.", 100, 330, 0,
+                font_scale_inv * 1.5, font_scale_inv * 1.5)
         end
         -- love.graphics.rectangle("fill", mainmenurect.x, mainmenurect.y, mainmenurect.w, mainmenurect.h)
     end
@@ -1066,6 +1207,7 @@ function love.draw()
             local has_btn = false
             local has_btn2 = false
             local has_device = false
+            local has_deliver2 = false
             for k, v in pairs(tasks) do
                 if v.type == "button" then
                     has_btn = true
@@ -1075,6 +1217,9 @@ function love.draw()
                 end
                 if v.type == "delivery" then
                     has_device = true
+                end
+                if v.type == "cheese_delivery" then
+                    has_deliver2 = true
                 end
             end
             if has_btn then
@@ -1089,6 +1234,11 @@ function love.draw()
             end
             if has_device then
                 love.graphics.print("Deliver the battery to the same colored device.", 24, height, 0, font_scale_inv * 2,
+                    font_scale_inv * 2)
+                height = height + 24
+            end
+            if has_deliver2 then
+                love.graphics.print("Put the cheese in the square hole.", 24, height, 0, font_scale_inv * 2,
                     font_scale_inv * 2)
                 height = height + 24
             end
@@ -1120,6 +1270,14 @@ function love.draw()
     if showhint > 0 then
         love.graphics.setColor(1, 0, 0)
         love.graphics.print("Use in-game cursor to click\n(press L to lock cursor)", love.mouse.getX() - 100,
-            love.mouse.getY() + 20, 0, font_scale_inv * 2, font_scale_inv * 2)
+            love.mouse.getY() + 20, 0, font_scale_inv * 2  * camzoom, font_scale_inv * 2  * camzoom)
+    end
+
+    if export_msg_time > 0 then
+        local font = love.graphics.getFont()
+        local scl = font_scale_inv * 2 * camzoom
+        local wid = font:getWidth(export_msg_str) * scl
+        love.graphics.setColor(export_msg_color)
+        love.graphics.print(export_msg_str, w / 2 - wid / 2, h / 2 + 20, 0, scl, scl)
     end
 end
